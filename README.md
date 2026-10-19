@@ -59,6 +59,23 @@ scripts/40-bringup.sh      # in-guest bring-up: sleepers, media stub, zygote, wa
 `systemReady`. Both parameterise `CORES` (default 1 — fastest under TCG, see
 [docs/PERF.md](docs/PERF.md)) and `MEM` (default 4096 MiB).
 
+### Optional: install a large APK
+
+Installing a large (hundreds-of-megabyte) APK into the running guest is an
+optional layer on top of `systemReady`:
+
+```sh
+scripts/50-install-apk.sh /path/to/app.apk
+```
+
+It needs two extra build-specific oat patches applied **before boot** (Group B
+in [patches/oat-patches.md](patches/oat-patches.md), one of which skips a
+signature-verify step — read the security note). Completing a large-APK install
+under contended software TCG is **stochastic and host-contention-gated**: it
+needs a quiet host and is not guaranteed on any single run. See
+[docs/INSTALL.md](docs/INSTALL.md) for the full protocol, the safety guards, and
+the honest caveats.
+
 Using the container:
 
 ```sh
@@ -73,13 +90,14 @@ docker run --rm -it -v "$PWD:/work" -w /work android-arm-tcg \
 | Path | What |
 |------|------|
 | `scripts/00..40` | the bring-up pipeline (download, patch, build, launch, in-guest) |
+| `scripts/50-install-apk.sh` | optional: install a large APK into the running guest |
 | `scripts/lib/`   | shared shell helpers and the byte patcher |
 | `src/initwrap.c` | the switch-root init wrapper (the key boot fix) |
 | `src/stub/`, `src/wdctl/`, `src/sleeper.sh` | in-guest bring-up helpers (source only) |
 | `patches/boot-patches.toml` | boot byte-patch specs (offsets/bytes as text) applied to downloaded files |
-| `patches/oat-patches.md` | generic recipe to raise framework watchdog/finalizer timeouts and neutralise the GNSS init hang |
+| `patches/oat-patches.md` | generic oat recipe: Group A (reach systemReady — watchdog/finalizer timeouts, GNSS init hang) + Group B (install a large APK) |
 | `tools/tcg-probe/` | a standalone TCG correctness/stability stress probe |
-| `docs/PERF.md`, `docs/BRINGUP.md` | performance rationale and the bring-up sequence/gotchas |
+| `docs/PERF.md`, `docs/BRINGUP.md`, `docs/INSTALL.md` | performance rationale, bring-up sequence/gotchas, large-APK install protocol |
 | `docs/adr/` | architecture decision records |
 
 ## No binaries, by construction
