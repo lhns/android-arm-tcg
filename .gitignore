@@ -1,0 +1,58 @@
+# This project commits ONLY text: source, scripts, patch specs, docs.
+# Everything binary is downloaded or built at runtime and must never be
+# committed. These rules make a stray download or build artifact un-committable.
+
+# Downloaded SDK (emulator, system image, platform-tools, build-tools, ...)
+sdk/
+*-sdk/
+cmdline-tools/
+platform-tools/
+build-tools/
+platforms/
+system-images/
+emulator/
+dl/
+
+# Build output and working state
+build/
+out/
+avd/
+dexbuild/
+*.class
+
+# Disk images and any extracted / rebuilt image artifact
+*.img
+*.img.gpt
+*.raw
+*.qcow2
+*.qcow2.*
+ramdisk-*.img
+system-raw.img
+
+# Compiled / disassembled artifacts (NEVER commit any of these)
+*.odex
+*.oat
+*.vdex
+*.art
+*.apk
+*.dex
+*.so
+*.o
+*.a
+*.elf
+init.real
+tools/tcg-probe/tcg-probe
+
+# Container / runtime state
+*.lock
+*.log
+*.pinned
+.emulator_console_auth_token
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
+# Editor / OS noise
+*.swp
+.DS_Store

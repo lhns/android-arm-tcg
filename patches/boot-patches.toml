@@ -1,0 +1,87 @@
+# boot-patches.toml -- boot byte-patch specs, applied to DOWNLOADED files.
+#
+# These are SPECS, not binaries: each is an offset or a string plus the exact
+# before/after bytes. scripts/lib/patch_bytes.py applies one by `id` to one
+# file, verifies the before bytes, and is idempotent. A build whose bytes do
+# not match aborts cleanly instead of corrupting the file.
+#
+# Offsets/bytes below are for the PINNED build (see scripts/00-setup.sh):
+#   emulator 37.3.3  (build 16489710, QEMU 2.12 base)
+#   system-images;android-28;google_apis;arm64-v8a
+# A different emulator/image revision will have different offsets; re-derive
+# them (the string patches locate themselves by content and are revision-robust;
+# the offset patches validate their before-bytes and abort if the build differs).
+
+# --- emulator (headless qemu binary) -----------------------------------------
+
+[[patch]]
+id = "soundhw-pci-abort"
+target = "emulator"
+method = "offset"
+offset = "0xb7ce7c"
+before = "31db"           # xor ebx,ebx
+after  = "b301"           # mov  bl,1
+note = "The headless binary aborts initialising a PCI sound device; forcing this branch skips it. (Offset is a cross-check; the byte sequence also recurs, so the before-bytes are validated at this exact offset.)"
+
+[[patch]]
+id = "emu-keep-initramfs"
+target = "emulator"
+method = "string"
+find = "skip_initramfs"
+replace = "keep_initramfs"
+pad = "none"
+note = "The front-end puts 'skip_initramfs' on the kernel cmdline, which makes the kernel ignore our ramdisk. Renaming the token to an unknown one makes the kernel keep (run) the initramfs init = our initwrap."
+
+[[patch]]
+id = "heapsize-cap"
+target = "emulator"
+method = "string"
+find = "qemu.dalvik.vm.heapsize"
+replace = "qemu.dalvik.vm.heapsizz"
+pad = "none"
+note = "A direct (no-AVD) launch forces qemu.dalvik.vm.heapsize=576m, overriding build.prop's 256m. ART's concurrent-copying GC cannot mmap a 576m region space under TCG and system_server SIGABRTs at startup. Breaking the prop NAME makes qemu-props set a harmless typo'd prop so build.prop's safe 256m default stands."
+
+# --- guest kernel -------------------------------------------------------------
+
+[[patch]]
+id = "kernel-keep-initramfs"
+target = "kernel"
+method = "string"
+find = "skip_initramfs"
+replace = "keep_initramfs"
+pad = "none"
+note = "Same token rename inside kernel-ranchu so the kernel's own parser also keeps the initramfs."
+
+# --- a front-end library that builds the guest device-tree fstab --------------
+
+[[patch]]
+id = "fstab-dev-vde"
+target = "libgfxstream"
+method = "string"
+find = "/dev/block/platform/%s.virtio_mmio/by-name/%s"
+replace = "/dev/block/vde"
+pad = "nul"
+note = "The front-end builds the guest fstab 'dev' from this snprintf template; the default resolves to a by-name symlink that first stage never creates. Point it at the whole-disk node /dev/block/vde, which exists immediately. NUL-padded to the original length."
+
+# --- vendor image fstab (vendor etc/fstab.ranchu) -----------------------------
+
+[[patch]]
+id = "vendor-forceencrypt"
+target = "vendor"
+method = "string"
+find = "forceencrypt=/dev/block/vdd"
+replace = ""
+pad = "space"
+note = "Blank the /data forceencrypt fs_mgr flag (27 chars -> spaces) so vold mounts /data un-force-encrypted; otherwise vold skips /data and the zygote never starts."
+
+# --- the image's first-stage init, preserved in the ramdisk as /init.real -----
+# (applied by scripts/20-build-ramdisk.sh to the extracted init, not by 10)
+
+[[patch]]
+id = "init-required-devices-timeout"
+target = "ramdisk-init"
+method = "offset"
+offset = "0x84b8"
+before = "e0031f2a"       # mov w0, wzr   (return 'timed out / failed')
+after  = "e0030032"       # orr w0, wzr, #1 (return 'ok')
+note = "InitRequiredDevices returns failure when a by-name uevent for a required device never arrives. Forcing the OK return lets first stage proceed to the /dev/block/vde mount instead of aborting. (API-28 /init: runtime VA = file offset + 0x400000.)"
